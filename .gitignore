@@ -1,0 +1,21 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+chatbot.db
+my_database.db
+node_modules/
+
+# Build artifacts - never commit binaries to GitHub
+backend/build/
+backend/dist/
+backend/*.spec
+
+# Electron / desktop release artifacts
+ui/Conversational os/release/
+ui/Conversational os/dist/
+ui/Conversational os/out/
+*.exe
+*.pkg
+*.dmg
+*.AppImage
