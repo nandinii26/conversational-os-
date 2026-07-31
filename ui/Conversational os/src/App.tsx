@@ -41,8 +41,10 @@ function App() {
   const [uploadingFile, setUploadingFile] = useState<boolean>(false);
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(null);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("jwt_token"));
-  // True while we're checking a stored token on startup (avoids flash of AuthPage)
-  const [authLoading, setAuthLoading] = useState<boolean>(() => !!localStorage.getItem("jwt_token"));
+  // Always start as true — the restoreSession effect checks BOTH localStorage AND
+  // URL ?token= param (Google OAuth callback). Without this, the app shows AuthPage
+  // immediately before the effect runs, breaking the Google login redirect flow.
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [sessionTitles, setSessionTitles] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem("sessionTitles") || "{}"); } catch { return {}; }
   });
