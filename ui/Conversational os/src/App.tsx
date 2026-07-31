@@ -180,28 +180,38 @@ function App() {
         // Check if Google OAuth just redirected back with a token in the URL
         const params = new URLSearchParams(window.location.search);
         const urlToken = params.get("token");
+        const activeToken = urlToken ?? localStorage.getItem("jwt_token");
+
         if (urlToken) {
           localStorage.setItem("jwt_token", urlToken);
           setToken(urlToken);
-          window.history.replaceState({}, document.title, "/");
+          // Clean the token out of the URL bar
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        const storedToken = localStorage.getItem("jwt_token");
-        if (!storedToken) {
+        if (!activeToken) {
           setAuthLoading(false);
           return;
         }
 
         const meRes = await fetch(`${API_BASE}/auth/me`, {
-          headers: { Authorization: `Bearer ${storedToken}` },
+          headers: { Authorization: `Bearer ${activeToken}` },
         });
         if (meRes.ok) {
           const userData = await meRes.json();
+          // This is the critical step — set user so the app renders instead of AuthPage
           setUser({
             name: userData.name || userData.email,
             email: userData.email,
             picture: userData.picture || "",
           });
+          if (urlToken) {
+            // Start a fresh session for the new Google login
+            const newSession = `session_${Date.now()}`;
+            setActiveSession(newSession);
+            setMessages([]);
+            localStorage.setItem("activeSession", newSession);
+          }
         } else if (meRes.status === 401) {
           // Only clear the token if it's definitively invalid/expired (401)
           localStorage.removeItem("jwt_token");
@@ -216,7 +226,7 @@ function App() {
       }
     };
     restoreSession();
-  }, []);
+  }, [])
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -286,10 +296,7 @@ function App() {
   }, [activeSession]);
 
 
-  // Single auth gate — placed after all hooks so Rules of Hooks are satisfied
-  if (!token || !user) {
-    return <AuthPage onLoginSuccess={handleLoginSuccess} />;
-  }
+  // Auth gate is handled below after authLoading check (see lines ~446-457)
 
 
 
