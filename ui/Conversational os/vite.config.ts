@@ -7,5 +7,6 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  base: './',  // Required for Electron: makes asset paths relative
+  // Use './' for Electron (relative asset paths) and '/' for Vercel web deployment
+  base: process.env.VITE_ELECTRON === '1' ? './' : '/',
 })
