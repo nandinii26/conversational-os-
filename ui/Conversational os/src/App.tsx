@@ -39,10 +39,17 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingFile, setUploadingFile] = useState<boolean>(false);
-  const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
+    try {
+      const stored = localStorage.getItem("user_profile");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("jwt_token"));
   // Always start as true — the restoreSession effect checks BOTH localStorage AND
-  // URL ?token= param (Google OAuth callback). Without this, the app shows AuthPage
+  // URL token params (Google OAuth callback). Without this, the app shows AuthPage
   // immediately before the effect runs, breaking the Google login redirect flow.
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [sessionTitles, setSessionTitles] = useState<Record<string, string>>(() => {
@@ -57,9 +64,15 @@ function App() {
     });
   };
 
-  const handleLoginSuccess = (newToken: string, userData: { name: string; email: string; picture: string }) => {
+  const persistAuthState = (newToken: string, userData: { name: string; email: string; picture: string }) => {
+    localStorage.setItem("jwt_token", newToken);
+    localStorage.setItem("user_profile", JSON.stringify(userData));
     setToken(newToken);
     setUser(userData);
+  };
+
+  const handleLoginSuccess = (newToken: string, userData: { name: string; email: string; picture: string }) => {
+    persistAuthState(newToken, userData);
     // Always start a fresh chat session on login
     const newSession = `session_${Date.now()}`;
     setActiveSession(newSession);
@@ -70,6 +83,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem("jwt_token");
     localStorage.removeItem("auth_token");
+    localStorage.removeItem("user_profile");
     localStorage.removeItem("activeSession");
     setToken(null);
     setUser(null);
@@ -179,16 +193,27 @@ function App() {
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        // Check if Google OAuth just redirected back with a token in the URL
         const params = new URLSearchParams(window.location.search);
-        const urlToken = params.get("token");
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const urlToken = params.get("token") || params.get("access_token") || hashParams.get("token") || hashParams.get("access_token");
+        const storedUserProfile = (() => {
+          try {
+            const stored = localStorage.getItem("user_profile");
+            return stored ? JSON.parse(stored) : null;
+          } catch {
+            return null;
+          }
+        })();
         const activeToken = urlToken ?? localStorage.getItem("jwt_token");
 
         if (urlToken) {
-          localStorage.setItem("jwt_token", urlToken);
-          setToken(urlToken);
-          // Clean the token out of the URL bar
-          window.history.replaceState({}, document.title, window.location.pathname);
+          persistAuthState(urlToken, storedUserProfile || {
+            name: "Signed in",
+            email: "",
+            picture: "",
+          });
+          const cleanUrl = `${window.location.pathname}${window.location.search.replace(/[?&](token|access_token)=[^&]+/g, "")}`;
+          window.history.replaceState({}, document.title, cleanUrl || "/");
         }
 
         if (!activeToken) {
@@ -201,12 +226,12 @@ function App() {
         });
         if (meRes.ok) {
           const userData = await meRes.json();
-          // This is the critical step — set user so the app renders instead of AuthPage
-          setUser({
-            name: userData.name || userData.email,
-            email: userData.email,
+          const resolvedUser = {
+            name: userData.name || userData.email || "Signed in",
+            email: userData.email || "",
             picture: userData.picture || "",
-          });
+          };
+          persistAuthState(activeToken, resolvedUser);
           if (urlToken) {
             // Start a fresh session for the new Google login
             const newSession = `session_${Date.now()}`;
@@ -214,15 +239,33 @@ function App() {
             setMessages([]);
             localStorage.setItem("activeSession", newSession);
           }
-        } else if (meRes.status === 401) {
-          // Only clear the token if it's definitively invalid/expired (401)
+        } else if (meRes.status === 401 || meRes.status === 403) {
           localStorage.removeItem("jwt_token");
+          localStorage.removeItem("user_profile");
           setToken(null);
+          setUser(null);
+        } else if (storedUserProfile) {
+          setUser(storedUserProfile);
+        } else {
+          persistAuthState(activeToken, {
+            name: "Signed in",
+            email: "",
+            picture: "",
+          });
         }
-        // For other errors (500, network issues), keep the token and let the user try again
       } catch (err) {
         console.error("Failed to restore session:", err);
-        // Network error — don't remove token, backend may be temporarily down
+        const storedUserProfile = (() => {
+          try {
+            const stored = localStorage.getItem("user_profile");
+            return stored ? JSON.parse(stored) : null;
+          } catch {
+            return null;
+          }
+        })();
+        if (storedUserProfile) {
+          setUser(storedUserProfile);
+        }
       } finally {
         setAuthLoading(false);
       }
