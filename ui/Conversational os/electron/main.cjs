@@ -19,12 +19,9 @@ function openAuthenticatedWindow(url) {
   if (!token || !mainWindow) return
 
   if (app.isPackaged) {
-    // Packaged app: load the bundled index.html with the token as a query param
     const indexPath = path.join(__dirname, '..', 'dist', 'index.html')
     mainWindow.loadFile(indexPath, { query: { token } })
   } else {
-    // Dev mode: load the Vite dev server URL with the token as a query param.
-    // loadFile would look for dist/index.html which doesn't exist during development.
     mainWindow.loadURL(`http://localhost:5173/?token=${token}`)
   }
   mainWindow.show()

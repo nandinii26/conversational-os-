@@ -153,7 +153,7 @@ export default function AuthPage({ onLoginSuccess }: AuthPageProps) {
           type="button"
           className="auth-google-btn"
           onClick={() => {
-            const url = `${API_BASE}/auth/login${isElectron ? "?desktop=1" : ""}`;
+            const url = `${API_BASE}/auth/login${isElectron ? "?desktop=1&redirect_uri=docpilot://auth" : ""}`;
             if (isElectron) {
               window.open(url, "_blank");
             } else {
