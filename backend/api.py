@@ -115,6 +115,23 @@ def _get_llm_client():
     llm_client = genai.Client(api_key=api_key)
     return llm_client
 
+voice_llm_client = None
+
+def _get_voice_llm_client():
+    global voice_llm_client
+    if voice_llm_client is not None:
+        return voice_llm_client
+
+    api_key = os.environ.get("VOICE_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Neither VOICE_GEMINI_API_KEY nor GEMINI_API_KEY is configured"
+        )
+
+    voice_llm_client = genai.Client(api_key=api_key)
+    return voice_llm_client
+
 class AgentRunRequest(BaseModel):
     message: str
     session_id: Optional[str] = "default"
