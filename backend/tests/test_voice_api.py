@@ -8,19 +8,27 @@ from fastapi.testclient import TestClient
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.api import app
 
-@patch('backend.api.llm_client.files.upload')
-@patch('backend.api.llm_client.models.generate_content')
+@patch('backend.api._get_llm_client')
 @patch('backend.api.orchestrator.run')
-def test_voice_endpoint(mock_orchestrator_run, mock_generate_content, mock_upload):
+def test_voice_endpoint(mock_orchestrator_run, mock_get_llm_client):
+    # Mock client
+    mock_client = MagicMock()
+    mock_get_llm_client.return_value = mock_client
+    
     # 1. Mock Gemini Files upload
     mock_file_obj = MagicMock()
     mock_file_obj.name = "files/mock-voice-file-id"
-    mock_upload.return_value = mock_file_obj
+    mock_client.files.upload.return_value = mock_file_obj
+    
+    # Mock Gemini Files get state
+    mock_file_state = MagicMock()
+    mock_file_state.state.name = "ACTIVE"
+    mock_client.files.get.return_value = mock_file_state
     
     # 2. Mock Gemini content generation (transcription)
     mock_response = MagicMock()
     mock_response.text = "search for resume"
-    mock_generate_content.return_value = mock_response
+    mock_client.models.generate_content.return_value = mock_response
     
     # 3. Mock Orchestrator run
     mock_orchestrator_run.return_value = {

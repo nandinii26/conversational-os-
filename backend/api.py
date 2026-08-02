@@ -430,6 +430,62 @@ import logging
 
 logger = logging.getLogger("uvicorn")
 
+class VoiceTextRequest(BaseModel):
+    text: str
+    session_id: Optional[str] = "default"
+
+@app.post("/agent/voice_text")
+async def agent_voice_text(request: VoiceTextRequest):
+    session_id = request.session_id or "default"
+    state = _get_session_state(session_id)
+    transcript = (request.text or "").strip()
+    
+    steps = [
+        "Step 1: Activated browser Web Speech API.",
+        "Step 2: Captured microphone voice input in browser.",
+        f"Step 3: Transcribed voice command in browser successfully: '{transcript}'",
+        f"Step 4: Directing transcribed command to NLU orchestrator: '{transcript}'"
+    ]
+    
+    try:
+        if not transcript:
+            steps.append("Step 5: Voice command was empty.")
+            database.save_chat(session_id, "bot", "I could not hear anything. Please try speaking again.")
+            return {
+                "status": "success",
+                "result": "I could not hear anything. Please try speaking again.",
+                "transcribed_text": "",
+                "steps": steps,
+                "action_metadata": {}
+            }
+            
+        # Save user message to database
+        database.save_chat(session_id, "user", f"[Voice] {transcript}")
+        
+        # Run orchestrator
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, orchestrator.run, transcript, state)
+        _session_states[session_id] = result["state"]
+        
+        # Save steps and response to DB
+        database.save_steps(session_id, result["steps"])
+        database.save_chat(session_id, "bot", result["result"])
+        
+        # Combine steps
+        combined_steps = steps + result["steps"]
+        
+        return {
+            "status": "success",
+            "result": result["result"],
+            "steps": combined_steps,
+            "transcribed_text": transcript,
+            "action_metadata": result["action_metadata"]
+        }
+    except Exception as e:
+        logger.error(f"Failed to process voice text command: {e}")
+        raise HTTPException(status_code=500, detail=f"Voice text agent error: {str(e)}")
+
+
 @app.post("/agent/voice")
 async def agent_voice(audio: UploadFile = File(...), session_id: str = "default"):
     state = _get_session_state(session_id)  # isolated per-session state
